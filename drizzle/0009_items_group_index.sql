@@ -1,0 +1,1 @@
+CREATE INDEX `items_group_id` ON `items` (`group_id`);

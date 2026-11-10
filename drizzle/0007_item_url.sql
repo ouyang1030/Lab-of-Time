@@ -1,0 +1,1 @@
+ALTER TABLE `items` ADD `url` text DEFAULT '' NOT NULL;
