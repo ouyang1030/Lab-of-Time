@@ -1,0 +1,63 @@
+{
+  "name": "lab-of-time",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "install:ci": "node scripts/install-ci.mjs",
+    "dev": "node scripts/run-framework.mjs dev",
+    "build": "node scripts/run-framework.mjs build",
+    "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --assets dist/client --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test:unit": "node --test tests/domain.test.mjs tests/search.test.mjs tests/import-calendar.test.mjs tests/calendar-sync.test.mjs tests/repeat.test.mjs tests/client-network.test.mjs",
+    "test:integration": "node tests/lab-isolation.integration.mjs && node tests/calendar-import.integration.mjs && node tests/membership.integration.mjs",
+    "test": "npm run test:unit && npm run test:integration",
+    "check": "tsc --noEmit && npm run lint && npm run test",
+    "db:generate": "drizzle-kit generate",
+    "cf:login": "wrangler login",
+    "cf:d1:migrate": "wrangler d1 migrations apply lab-of-time-db --remote --config dist/server/wrangler.json",
+    "cf:d1:migrate:staging": "wrangler d1 migrations apply lab-of-time-db-staging --remote --config dist/server/wrangler.json",
+    "cf:d1:migrate:local": "wrangler d1 migrations apply lab-of-time-db --local --config dist/server/wrangler.json --persist-to .wrangler/state",
+    "cf:deploy": "node -e 'if(!process.env.CLOUDFLARE_D1_ID){console.error(\"CLOUDFLARE_D1_ID is required for production deployment.\");process.exit(1)}' && wrangler deploy --config dist/server/wrangler.json",
+    "cf:deploy:staging": "wrangler deploy --config dist/server/wrangler.json --env staging"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "0.45.2",
+    "ical.js": "^2.2.1",
+    "lucide-react": "^1.31.0",
+    "next": "16.4.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "4.20260515.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.4.6",
+    "json-rpc-2.0": "1.7.1",
+    "raw-body": "3.0.2",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vinext": "1.0.0-beta.5",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "type": "module",
+  "overrides": {
+    "miniflare": {
+      "sharp": "0.35.4"
+    }
+  }
+}
