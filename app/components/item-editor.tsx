@@ -63,7 +63,7 @@ export default function ItemEditor({
   busy: boolean;
   onSave: (item: Item, repeat: Repeat | null) => Promise<boolean>;
   onDelete: (item: Item) => Promise<boolean>;
-  onRsvp: (id: string, response: "yes" | "no") => Promise<boolean>;
+  onRsvp: (id: string, response: "yes" | null) => Promise<boolean>;
   onClose: () => void;
 }) {
   const hasNotes = !!(item.description || item.url);
@@ -80,8 +80,11 @@ export default function ItemEditor({
   const editable = !!me && (!item.id || canEdit(me, item));
   const update = <K extends keyof Item>(key: K, value: Item[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
-  const replies = attendance.filter((rsvp) => rsvp.itemId === item.id);
-  const response = replies.find((rsvp) => rsvp.memberId === me?.id)?.response;
+  const [replyFailed, setReplyFailed] = useState(false);
+  const attendingIds = new Set(attendance
+    .filter((reply) => reply.itemId === item.id && reply.response === "yes")
+    .map((reply) => reply.memberId));
+  const attending = !!me && attendingIds.has(me.id);
   // All-day end dates are stored exclusive; the form always shows the last day.
   const endDay = draft.allDay ? lastItemDate(draft) : draft.endDate || draft.date;
   const repeat =
@@ -386,52 +389,37 @@ export default function ItemEditor({
             </button>
           )
         )}
-        {item.type === "meeting" && item.id && (
+        {item.type === "meeting" && item.id && me && (
           <div className="attendance-box">
-            <div className="section-row">
-              <strong>Attendance</strong>
-              <span>
-                {replies.filter((reply) => reply.response === "yes").length}{" "}
-                attending
+            <label className="attendance-reply">
+              <Avatar member={me} small />
+              <span>{me.name}</span>
+              <input
+                type="checkbox"
+                aria-label="Confirm my attendance"
+                checked={attending}
+                disabled={busy}
+                onChange={async (event) => {
+                  setReplyFailed(false);
+                  const saved = await onRsvp(item.id, event.target.checked ? "yes" : null);
+                  setReplyFailed(!saved);
+                }}
+              />
+              <span className="attendance-check" aria-hidden="true">
+                {attending && <Check size={15} strokeWidth={3} />}
               </span>
-            </div>
-            <div className="attendees">
-              {replies.map((reply) => {
-                const member = members.find((m) => m.id === reply.memberId);
-                return (
-                  member && (
-                    <span key={member.id}>
-                      <Avatar member={member} small />
-                      {member.name}
-                      <small>
-                        {reply.response === "yes" ? "Going" : "Declined"}
-                      </small>
-                    </span>
-                  )
-                );
-              })}
-            </div>
-            {me && (
-              <div className="rsvp-buttons">
-                <button
-                  type="button"
-                  disabled={busy}
-                  className={response === "yes" ? "button primary" : "button"}
-                  onClick={() => onRsvp(item.id, "yes")}
-                >
-                  <Check size={15} />
-                  {response === "yes" ? "Attending" : "Attend"}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className={response === "no" ? "button active" : "button"}
-                  onClick={() => onRsvp(item.id, "no")}
-                >
-                  Decline
-                </button>
-              </div>
+            </label>
+            {attending && (
+              <ul className="attendance-avatars" aria-label="Attending members">
+                {members.filter((member) => attendingIds.has(member.id)).map((member, index) => (
+                  <li key={member.id} tabIndex={0} aria-label={member.name}
+                    data-name={member.name} style={{ animationDelay: `${Math.min(index, 5) * 18}ms` }}>
+                    <Avatar member={member} small />
+                  </li>
+                ))}
+              </ul>
             )}
+            {replyFailed && <small role="alert">Couldn’t save your reply. Please try again.</small>}
           </div>
         )}
         {editable && (

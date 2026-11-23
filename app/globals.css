@@ -1884,27 +1884,69 @@ button.role-badge:focus-visible,
   padding: 15px;
   margin-top: 10px;
 }
-.attendees {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-}
-.attendees > span {
+.attendance-reply {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10px;
+  gap: 10px;
+  min-height: 40px;
+  cursor: pointer;
 }
-.attendees small {
-  font-size: 9px;
-  color: #999;
+.attendance-reply input {
+  position: absolute;
+  right: 0;
+  opacity: 0;
 }
-.rsvp-buttons {
+.attendance-check {
+  flex: 0 0 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  border: 1px solid #888;
+  border-radius: 4px;
+}
+.attendance-reply input:checked + .attendance-check {
+  background: #222;
+  border-color: #222;
+  color: white;
+}
+.attendance-reply input:focus-visible + .attendance-check {
+  outline: 2px solid currentColor;
+  outline-color: #555;
+  outline-offset: 3px;
+}
+.attendance-avatars {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid #ddd;
 }
+.attendance-avatars li { position: relative; }
+.attendance-avatars li:focus-visible::after {
+  content: attr(data-name);
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 0;
+  padding: 3px 6px;
+  background: #222;
+  color: white;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .attendance-check svg polyline, .attendance-check svg path {
+    stroke-dasharray: 25;
+    animation: draw-check 150ms ease-out;
+  }
+  .attendance-avatars li { animation: reveal-attendee 150ms ease-out backwards; }
+}
+@keyframes draw-check { from { stroke-dashoffset: 25; } }
+@keyframes reveal-attendee { from { opacity: 0; transform: translateY(4px); } }
 .notice {
   display: flex;
   align-items: center;
@@ -3501,3 +3543,19 @@ button.role-badge:focus-visible,
 .day-cell:has(.event-preview){z-index:5}
 .button.danger-text{color:#b91c1c}
 .turnstile{min-height:65px;margin-bottom:14px}
+
+.event-pill.priority-fold, .week-event.priority-fold {
+  position: relative;
+  padding-right: 12px;
+}
+.priority-fold::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(45deg, var(--member-accent) 50%, var(--member-bg-strong) 50%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  pointer-events: none;
+}

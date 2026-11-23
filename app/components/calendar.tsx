@@ -67,6 +67,7 @@ export function EventPill({
   connectLeft = false,
   connectRight = false,
   isRowStart = false,
+  isLastDay,
 }: {
   item: Item;
   color?: MemberColor;
@@ -77,6 +78,7 @@ export function EventPill({
   connectLeft?: boolean;
   connectRight?: boolean;
   isRowStart?: boolean;
+  isLastDay: boolean;
 }) {
   const showIcon = !connectLeft;
   const showTitle = !connectLeft || isRowStart;
@@ -85,6 +87,7 @@ export function EventPill({
   const classes = [
     "event-pill",
     item.type,
+    item.priority === "high" && isLastDay ? "priority-fold" : "",
     `color-${color}`,
     item.status === "done" ? "completed" : "",
     onToggleDone ? "can-complete" : "",
@@ -106,6 +109,7 @@ export function EventPill({
       <button
         className={classes}
         onClick={() => onSelect(item)}
+        aria-label={item.priority === "high" ? `${item.title}, high priority` : undefined}
         title={`${itemTimeLabel(item)} ${item.title}`}
       >
         {showIcon && (
@@ -348,6 +352,7 @@ export default function Calendar({
                           }
                           connectLeft={slotItem.connectLeft}
                           connectRight={slotItem.connectRight}
+                          isLastDay={key === lastItemDate(slotItem.item)}
                           isRowStart={slotItem.isRowStart}
                         />
                       ) : (
@@ -366,7 +371,8 @@ export default function Calendar({
                         owner={ownerName(item.ownerId)}
                       >
                         <button
-                          className={`week-event ${item.type} color-${memberColor(item.ownerId)} ${item.status === "done" ? "completed" : ""}`}
+                          aria-label={item.priority === "high" ? `${item.title}, high priority` : undefined}
+                          className={`week-event ${item.priority === "high" ? "priority-fold" : ""} ${item.type} color-${memberColor(item.ownerId)} ${item.status === "done" ? "completed" : ""}`}
                           onClick={() => onSelect(item)}
                         >
                           <time>{itemTimeLabel(item)}</time>

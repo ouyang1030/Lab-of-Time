@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowDownToLine,
+  ArrowUpFromLine,
   ArrowUpRight,
   CalendarArrowDown,
   CalendarDays,
@@ -676,7 +676,7 @@ export default function ResearchApp({
                         setToast("Calendar exported (.ics)");
                       }}
                     >
-                      <ArrowDownToLine size={16} />
+                      <ArrowUpFromLine size={16} />
                     </button>
                   </div>
                   {search.trim() ? (
@@ -998,7 +998,7 @@ export default function ResearchApp({
                 { action: "rsvp", id, response },
                 response === "yes"
                   ? "Marked as attending"
-                  : "Marked as declined",
+                  : "Attendance withdrawn",
               )
             }
             onClose={() => setEditor(null)}

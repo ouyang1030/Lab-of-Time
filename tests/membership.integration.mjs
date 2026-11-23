@@ -45,6 +45,9 @@ const before = await req(member);
 const meeting = before.items.find(item => item.type === 'meeting');
 await req(owner, { action: 'rsvp', id: meeting.id, response: 'yes' });
 await req(member, { action: 'rsvp', id: meeting.id, response: 'yes' });
+await req(member, { action: 'rsvp', id: meeting.id, response: null });
+assert.deepEqual((await req(member)).attendance, [{ itemId: meeting.id, memberId: owner.id, response: 'yes' }]);
+await req(member, { action: 'rsvp', id: meeting.id, response: 'yes' });
 // A deliberately unresolvable feed is persisted with a failed-sync status.
 // This exercises real subscription cleanup without depending on an external ICS fixture.
 const subscribed = await req(member, { action: 'subscribeCalendar', sourceName: 'Departure feed', url: 'https://membership-test.invalid/calendar.ics' });

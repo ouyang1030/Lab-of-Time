@@ -150,7 +150,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("rsvp"),
     id: z.string(),
-    response: z.enum(["yes", "no"]),
+    response: z.enum(["yes", "no"]).nullable(),
   }),
   z.object({
     action: z.literal("profile"),
@@ -854,17 +854,24 @@ export async function POST(request: Request) {
       } else {
         if (item.type !== "meeting")
           throw new HttpError(400, "RSVP is only available for meetings");
-        await db
-          .insert(attendance)
-          .values({
-            itemId: item.id,
-            memberId: me.id,
-            response: input.response,
-          })
-          .onConflictDoUpdate({
-            target: [attendance.itemId, attendance.memberId],
-            set: { response: input.response },
-          });
+        if (input.response === null) {
+          await db.delete(attendance).where(and(
+            eq(attendance.itemId, item.id),
+            eq(attendance.memberId, me.id),
+          ));
+        } else {
+          await db
+            .insert(attendance)
+            .values({
+              itemId: item.id,
+              memberId: me.id,
+              response: input.response,
+            })
+            .onConflictDoUpdate({
+              target: [attendance.itemId, attendance.memberId],
+              set: { response: input.response },
+            });
+        }
       }
     } else if (input.action === "profile") {
       const account = (await db.select().from(accounts).where(eq(accounts.id, me.id)).get())!;
