@@ -3544,18 +3544,38 @@ button.role-badge:focus-visible,
 .button.danger-text{color:#b91c1c}
 .turnstile{min-height:65px;margin-bottom:14px}
 
-.event-pill.priority-fold, .week-event.priority-fold {
+.priority-fold {
+  --fold-size: 11px;
+  --fold-ink: var(--member-text);
   position: relative;
-  padding-right: 12px;
+  border-top-right-radius: 0;
+  clip-path: polygon(0 0, calc(100% - var(--fold-size)) 0,
+    100% var(--fold-size), 100% 100%, 0 100%);
+}
+.week-event.priority-fold {
+  --fold-size: 15px;
+}
+.event-pill.priority-fold, .week-event.priority-fold {
+  padding-right: calc(var(--fold-size) + 3px);
+}
+.priority-fold.completed {
+  --fold-ink: #888;
 }
 .priority-fold::after {
   content: "";
   position: absolute;
   top: 0;
   right: 0;
-  width: 8px;
-  height: 8px;
-  background: linear-gradient(45deg, var(--member-accent) 50%, var(--member-bg-strong) 50%);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  width: var(--fold-size);
+  height: var(--fold-size);
+  border-bottom-left-radius: 3px;
+  background: linear-gradient(45deg,
+    color-mix(in srgb, var(--fold-ink) 32%, white),
+    color-mix(in srgb, var(--fold-ink) 75%, white) 47%,
+    var(--fold-ink) 51%);
+  box-shadow: -1px 1px 2px color-mix(in srgb, var(--fold-ink) 35%, transparent);
   pointer-events: none;
+}
+.priority-fold:focus-visible {
+  outline-offset: -2px;
 }
