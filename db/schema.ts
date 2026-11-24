@@ -1,4 +1,4 @@
-import { MEMBER_COLORS, type MemberColor } from "../lib/model";
+import { FEED_SCOPES, MEMBER_COLORS, type MemberColor } from "../lib/model";
 import type { RepeatEvery } from "../lib/repeat";
 import {
   integer,
@@ -114,3 +114,15 @@ export const calendarSubscriptions = sqliteTable(
   },
   (table) => [uniqueIndex("calendar_subscriptions_member_name").on(table.memberId, table.name)],
 );
+/** One secret subscription link per member; only the token's SHA-256 is stored. */
+export const calendarFeeds = sqliteTable("calendar_feeds", {
+  memberId: text("member_id")
+    .primaryKey()
+    .references(() => members.id),
+  groupId: text("group_id")
+    .notNull()
+    .references(() => groups.id),
+  tokenHash: text("token_hash").notNull().unique(),
+  scope: text("scope", { enum: FEED_SCOPES }).notNull(),
+  createdAt: integer("created_at").notNull(),
+});

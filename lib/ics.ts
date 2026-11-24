@@ -5,7 +5,34 @@ const escapeText = (text: string) =>
     .replace(/\r\n?|\n/g, "\\n")
     .replace(/,/g, "\\,")
     .replace(/;/g, "\\;");
-export function toCalendar(items: Item[], now = new Date()): string {
+// Outlook and some other clients ignore a TZID without its definition; these are the EU rules in force since 1996.
+const VIENNA_TIMEZONE = [
+  "BEGIN:VTIMEZONE",
+  "TZID:Europe/Vienna",
+  "BEGIN:DAYLIGHT",
+  "TZOFFSETFROM:+0100",
+  "TZOFFSETTO:+0200",
+  "TZNAME:CEST",
+  "DTSTART:19700329T020000",
+  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "TZOFFSETFROM:+0200",
+  "TZOFFSETTO:+0100",
+  "TZNAME:CET",
+  "DTSTART:19701025T030000",
+  "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+];
+const utf8Length = (char: string) => {
+  const code = char.codePointAt(0)!;
+  return code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+};
+export function toCalendar(
+  items: Item[],
+  { name = "Lab of Time", now = new Date() }: { name?: string; now?: Date } = {},
+): string {
   const stamp = now
     .toISOString()
     .replace(/[-:]/g, "")
@@ -15,13 +42,20 @@ export function toCalendar(items: Item[], now = new Date()): string {
     "VERSION:2.0",
     "PRODID:-//Lab of Time//Calendar//EN",
     "CALSCALE:GREGORIAN",
+    `X-WR-CALNAME:${escapeText(name)}`,
     "X-WR-TIMEZONE:Europe/Vienna",
+    // Polling hints for subscribed calendars; imported files ignore them.
+    "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+    "X-PUBLISHED-TTL:PT1H",
+    ...VIENNA_TIMEZONE,
   ];
   for (const item of items) {
     lines.push(
       "BEGIN:VEVENT",
       `UID:${item.id}@lab-of-time`,
       `DTSTAMP:${stamp}`,
+      // Every saved change bumps the version, so clients replace older copies.
+      `SEQUENCE:${item.version}`,
     );
     if (item.allDay) {
       lines.push(`DTSTART;VALUE=DATE:${item.date.replaceAll("-", "")}`, `DTEND;VALUE=DATE:${(item.endDate || item.date).replaceAll("-", "")}`);
@@ -46,7 +80,7 @@ export function toCalendar(items: Item[], now = new Date()): string {
         let part = "";
         let length = 0;
         for (const char of line) {
-          const bytes = new TextEncoder().encode(char).length;
+          const bytes = utf8Length(char);
           if (length + bytes > 73) {
             parts.push(part);
             part = " ";

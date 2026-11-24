@@ -51,7 +51,7 @@ import {
 } from "@/lib/model";
 import { overlapsDates, itemTimeLabel } from "@/lib/item-dates";
 import CalendarImport from "./components/calendar-import";
-import { exportCalendar } from "@/lib/ics";
+import CalendarExport from "./components/calendar-export";
 
 type Section = "calendar" | "tasks" | "meetings" | "milestones" | "members";
 const TITLES: Record<Section, string> = {
@@ -80,6 +80,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
   items: [],
   attendance: [],
   subscriptions: [],
+  calendarFeed: null,
 };
 const newItem = (
   ownerId: string,
@@ -130,6 +131,9 @@ export default function ResearchApp({
   turnstileSiteKey: string;
 }) {
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  // A new subscription link's token arrives once; it is kept only while the dialog is open.
+  const [feedToken, setFeedToken] = useState("");
   const [today, setToday] = useState(todayInVienna);
   const [date, setDate] = useState(todayInVienna);
   const [selectedDay, setSelectedDay] = useState(() =>
@@ -210,13 +214,15 @@ export default function ResearchApp({
   );
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Browser autofill dispatches keydown events without a key, so compare instead of calling methods on it.
       if (
-        event.key.toLowerCase() !== "n" ||
+        (event.key !== "n" && event.key !== "N") ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
         editor ||
         importOpen ||
+        exportOpen ||
         panel ||
         !me
       )
@@ -237,7 +243,7 @@ export default function ResearchApp({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editor, importOpen, panel, me, section, selectedDay, view]);
+  }, [editor, importOpen, exportOpen, panel, me, section, selectedDay, view]);
   const activeMembers = data.members.filter((member) => member.active);
   const todayKey = dateKey(today);
   const [rangeStart, rangeEnd] = periodRange(date, view);
@@ -308,13 +314,15 @@ export default function ResearchApp({
       const result = (await response.json()) as Snapshot & {
         error: string;
         resetCode?: string;
+        feedToken?: string;
         notice?: string;
       };
       if (!response.ok) throw new Error(result.error);
-      const { resetCode, ...next } = result;
+      const { resetCode, feedToken: issuedFeedToken, ...next } = result;
       setSnapshot(next);
       if (resetCode)
         setIssuedReset({ memberId: String(command.id), code: resetCode });
+      if (issuedFeedToken) setFeedToken(issuedFeedToken);
       if (result.notice || message) setToast(result.notice || message);
       return true;
     } catch (cause) {
@@ -669,15 +677,28 @@ export default function ResearchApp({
                     )}
                     <button
                       className="icon-button"
-                      aria-label="Export current period as ICS"
-                      title="Export calendar (.ics)"
-                      onClick={() => {
-                        exportCalendar(inPeriod);
-                        setToast("Calendar exported (.ics)");
-                      }}
+                      aria-label="Subscribe or export calendar"
+                      title="Subscribe or export calendar"
+                      onClick={() => setExportOpen(true)}
                     >
                       <ArrowUpFromLine size={16} />
                     </button>
+                    {exportOpen && (
+                      <CalendarExport
+                        feed={data.calendarFeed}
+                        feedToken={feedToken}
+                        periodItems={inPeriod}
+                        periodLabel={periodLabel}
+                        busy={busy}
+                        onCommand={mutate}
+                        onCopy={copyCode}
+                        onDownloaded={() => setToast("Calendar exported (.ics)")}
+                        onClose={() => {
+                          setExportOpen(false);
+                          setFeedToken("");
+                        }}
+                      />
+                    )}
                   </div>
                   {search.trim() ? (
                     <div className="search-results">

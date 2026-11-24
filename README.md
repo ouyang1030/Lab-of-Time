@@ -8,7 +8,7 @@ Shared research calendar for a lab: tasks, meetings and milestones on weekly, mo
 - **Items**: Mac Calendar–style editor with location, all-day and multi-day dates, repeats (daily to yearly, up to 100 items; changing the rule replaces the later occurrences instead of adding to them), cycle, status, priority, assignee, notes and a URL.
 - **Meetings**: time ranges and Attend / Decline responses.
 - **Import & subscribe**: ICS files or public HTTPS / `webcal://` feeds (Google, Outlook, Apple, university calendars). Subscriptions sync every 12 hours or on demand, keep local edits, and can be undone per batch.
-- **Export**: filtered items as `lab-of-time.ics`.
+- **Subscribe & export**: each member can create one secret subscription link (`https://…/api/calendar/<token>.ics`, or `webcal://` for Apple Calendar) for Google Calendar, Apple Calendar or Outlook, showing either *My items* (assigned items and accepted meetings) or the *Whole lab*. The scope can be changed without changing the link. Feeds cover items from the past 90 days onward and leave out events the member imported from other calendars, so those do not appear twice. Calendar apps decide how often they refresh (Google can take up to a day), and subscriptions are read-only. The current period, with filters applied, can still be downloaded as `lab-of-time.ics`.
 - **Labs & roles**: email/password accounts; after signing up, a user creates a lab or joins one with an invite code.
 
 | Role | Can |
@@ -69,12 +69,14 @@ Run migrations before deploying code that depends on them. Roll back with `npx w
   - Sign-in and reset: 10 per email per network and 50 per network, per 15 minutes.
   - Signed-in members: 60 write requests per minute.
   - Calendar feeds: 10 per hour.
+  - Subscription links: 60 fetches per hour per link.
 - Requests are capped at 3 MB (a declared `Content-Length` is required) and labs at 10,000 items. Changing the sign-in email requires the current password.
 - Item URLs must be single-line `http(s)` addresses; exported ICS text is escaped.
 - Every query is scoped to the member's lab. Anonymous responses contain no lab data.
 - Password recovery uses Owner-issued, single-use reset codes valid for 24 hours.
 - Ownership transfer is atomic; the former Owner becomes Admin.
 - Feed URLs are checked hop by hop against private networks (2 MB, 3 redirects).
+- Subscription links carry a 256-bit random token that is shown once and stored only as a SHA-256 hash. A link is served only while its member is active in the lab that issued it. Creating a new link retires the old one, and leaving, removal, account deletion and dissolving the lab delete it.
 - Response headers include an enforced CSP plus HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy and Permissions-Policy. Inline scripts stay allowed until vinext supports nonces.
 - A daily cron purges expired sessions, rate-limit windows and reset codes, and deletes accounts that have no lab and have not signed in for 700 days.
 - Security events are logged as JSON with account IDs and client networks, never emails or passwords.

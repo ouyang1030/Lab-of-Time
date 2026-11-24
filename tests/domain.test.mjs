@@ -83,6 +83,7 @@ test("ICS preserves timezone, escapes text, and folds Unicode at octet boundarie
       time: "14:00",
       endTime: "15:00",
       type: "meeting",
+      version: 1,
     },
   ]);
   assert.match(calendar, /DTSTART;TZID=Europe\/Vienna:20261109T140000/);

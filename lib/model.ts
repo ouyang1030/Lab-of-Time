@@ -72,6 +72,14 @@ export type Snapshot = {
   items: Item[];
   attendance: Rsvp[];
   subscriptions: CalendarSubscription[];
+  /** The member's own subscription link; its token is returned only when created. */
+  calendarFeed: { scope: FeedScope; createdAt: number } | null;
+};
+export const FEED_SCOPES = ["mine", "lab"] as const;
+export type FeedScope = (typeof FEED_SCOPES)[number];
+export const FEED_SCOPE_LABELS: Record<FeedScope, string> = {
+  mine: "My items",
+  lab: "Whole lab",
 };
 /** Sends one workspace command; resolves true once the returned snapshot is applied. */
 export type Mutate = (

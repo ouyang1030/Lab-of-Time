@@ -6,8 +6,9 @@ import { hash, compare } from "bcryptjs";
 import { and, eq, gt, lt, ne, sql } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { getDb } from "@/db";
-import { groups, members, items, attendance, accounts, sessions, passwordResets, calendarSubscriptions } from "@/db/schema";
-import { MEMBER_COLORS, type MemberColor, canEdit } from "@/lib/model";
+import { groups, members, items, attendance, accounts, sessions, passwordResets, calendarSubscriptions, calendarFeeds } from "@/db/schema";
+import { FEED_SCOPES, FEED_SCOPE_LABELS, MEMBER_COLORS, type MemberColor, canEdit } from "@/lib/model";
+import { countAttempt, sha256Hex } from "@/lib/server-security";
 import { validDate } from "@/lib/calendar";
 import { REPEAT_LABELS, MAX_REPEAT_ITEMS, repeatDates, daysBetween, shiftDate, type RepeatEvery } from "@/lib/repeat";
 import { clientNetwork } from "@/lib/client-network";
@@ -93,6 +94,10 @@ const requestSchema = z.discriminatedUnion("action", [
  z.object({action:z.literal("subscribeCalendar"),url:z.string().max(4096),sourceName:shortText}),
  z.object({action:z.literal("syncSubscription"),id:z.string().uuid()}),
  z.object({action:z.literal("unsubscribeCalendar"),id:z.string().uuid(),removeEvents:z.boolean()}),
+ // Creating again replaces the link; changing the scope keeps it.
+ z.object({action:z.literal("createCalendarFeed"),scope:z.enum(FEED_SCOPES)}),
+ z.object({action:z.literal("setCalendarFeedScope"),scope:z.enum(FEED_SCOPES)}),
+ z.object({action:z.literal("deleteCalendarFeed")}),
  z.object({action:z.literal("register"),email,password,displayName:shortText,turnstileToken}),
  z.object({action:z.literal("login"),email,password:z.string().min(1).max(200),turnstileToken}),
  z.object({action:z.literal("transferOwnership"),id:z.string()}),
@@ -188,10 +193,6 @@ function sessionToken(request: Request) {
       ?.slice(SESSION_COOKIE.length + 1) ?? ""
   );
 }
-async function sha256Hex(text: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
 async function sessionAccountId(request: Request): Promise<string | null> {
   const token = sessionToken(request);
   if (!token) return null;
@@ -233,14 +234,10 @@ const network = (request: Request) =>
   clientNetwork(request.headers.get("cf-connecting-ip") ?? "local");
 
 type Limit = readonly [key: string, max: number, windowMs: number];
-/** Fixed-window counters; the key prefix before ":" names the limit in logs. Keys are hashed because some hold emails. */
+/** Fixed-window counters; the key prefix before ":" names the limit in logs. */
 async function consumeLimits(request: Request, limits: Limit[]) {
-  const now = Date.now();
   for (const [key, max, windowMs] of limits) {
-    const row = await getDb().get<{ attempts: number }>(
-      sql`INSERT INTO auth_limits (key,attempts,reset_at) VALUES (${await sha256Hex(key)},1,${now + windowMs}) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN reset_at<=${now} THEN 1 ELSE attempts+1 END, reset_at=CASE WHEN reset_at<=${now} THEN ${now + windowMs} ELSE reset_at END RETURNING attempts`,
-    );
-    if (row!.attempts > max) {
+    if ((await countAttempt(getDb(), key, windowMs)) > max) {
       logSecurityEvent("rate_limited", { limit: key.slice(0, key.indexOf(":")), network: network(request) });
       throw new HttpError(429, "Too many attempts. Please try again later.");
     }
@@ -270,6 +267,7 @@ function labDeletion(groupId: string) {
     db.delete(attendance).where(sql`${attendance.itemId} IN (SELECT id FROM items WHERE group_id=${groupId})`),
     db.delete(items).where(eq(items.groupId, groupId)),
     db.delete(calendarSubscriptions).where(eq(calendarSubscriptions.groupId, groupId)),
+    db.delete(calendarFeeds).where(eq(calendarFeeds.groupId, groupId)),
     db.delete(attendance).where(sql`${attendance.memberId} IN (SELECT id FROM members WHERE group_id=${groupId})`),
     db.delete(members).where(eq(members.groupId, groupId)),
     db.delete(groups).where(eq(groups.id, groupId)),
@@ -303,11 +301,13 @@ async function leaveMembership(input: Action<"removeMember" | "leaveGroup">, me:
       .where(and(eq(items.groupId, me.groupId), eq(items.ownerId, target.id), permitted)),
     db.delete(attendance).where(and(eq(attendance.memberId, target.id), permitted)),
     db.delete(calendarSubscriptions).where(and(eq(calendarSubscriptions.memberId, target.id), eq(calendarSubscriptions.groupId, me.groupId), permitted)),
+    // Member ids are account ids, so a link left behind would follow them into their next lab.
+    db.delete(calendarFeeds).where(and(eq(calendarFeeds.memberId, target.id), permitted)),
     // A reset issued by the former lab must no longer grant access to this account.
     db.delete(passwordResets).where(and(eq(passwordResets.accountId, target.id), permitted)),
     db.delete(members).where(and(eq(members.id, target.id), eq(members.groupId, me.groupId), permitted)).returning({ id: members.id }),
   ]);
-  if (!results[4].length)
+  if (!results[5].length)
     throw new HttpError(409, "Lab membership changed. Refresh and try again.");
   logSecurityEvent(removing ? "member_removed" : "member_left", { by: me.id, target: target.id, lab: me.groupId });
   return jsonResponse(await buildSnapshot(me.id));
@@ -336,6 +336,7 @@ const SIGNED_OUT_SNAPSHOT = {
   items: [],
   attendance: [],
   subscriptions: [],
+  calendarFeed: null,
 };
 
 /** Everything the signed-in account may see; `accountId` comes from a verified session. */
@@ -352,7 +353,7 @@ async function buildSnapshot(accountId: string | null) {
       ...SIGNED_OUT_SNAPSHOT,
       user: { userId: accountId, displayName: account!.name, email },
     };
-  const [group, team, entries, responses, feeds] = await Promise.all([
+  const [group, team, entries, responses, feeds, calendarFeed] = await Promise.all([
     db.select().from(groups).where(eq(groups.id, me.groupId)).get(),
     db
       .select({
@@ -379,6 +380,7 @@ async function buildSnapshot(accountId: string | null) {
       .where(eq(items.groupId, me.groupId)),
     // Feed URLs can be secret links, so only their owner sees subscriptions.
     db.select().from(calendarSubscriptions).where(eq(calendarSubscriptions.memberId, me.id)),
+    db.select({ scope: calendarFeeds.scope, createdAt: calendarFeeds.createdAt }).from(calendarFeeds).where(eq(calendarFeeds.memberId, me.id)).get(),
   ]);
   return {
     hasWorkspace: true,
@@ -392,6 +394,7 @@ async function buildSnapshot(accountId: string | null) {
     items: entries.map((item) => ({ ...item, sourceData: undefined })),
     attendance: responses,
     subscriptions: feeds.map(({ id, name, url, lastSyncAt, lastOk, lastMessage }) => ({ id, name, host: new URL(url).hostname, lastSyncAt, lastOk, lastMessage })),
+    calendarFeed: calendarFeed ?? null,
   };
 }
 
@@ -503,6 +506,7 @@ async function manageAccount(
       db.delete(attendance).where(sql`${attendance.itemId} IN (SELECT id FROM items WHERE owner_id=${account.id})`),
       db.delete(items).where(eq(items.ownerId, account.id)),
       db.delete(calendarSubscriptions).where(eq(calendarSubscriptions.memberId, account.id)),
+      db.delete(calendarFeeds).where(eq(calendarFeeds.memberId, account.id)),
       db.delete(members).where(eq(members.id, account.id)),
     );
   }
@@ -604,6 +608,29 @@ async function manageSubscription(
   ));
   await db.batch(input.removeEvents ? [unsubscribe, removal] : [unsubscribe]);
   return withNotice(input.removeEvents ? `Stopped syncing ${subscription.name} and removed its unedited meetings` : `Stopped syncing ${subscription.name}; its meetings remain`);
+}
+
+/** The token appears only in this response; the database keeps its hash. */
+async function manageCalendarFeed(
+  input: Action<"createCalendarFeed" | "setCalendarFeedScope" | "deleteCalendarFeed">,
+  me: LabMember,
+) {
+  const db = getDb();
+  if (input.action === "createCalendarFeed") {
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const feed = { memberId: me.id, groupId: me.groupId, tokenHash: await sha256Hex(token), scope: input.scope, createdAt: Date.now() };
+    await db.insert(calendarFeeds).values(feed).onConflictDoUpdate({ target: calendarFeeds.memberId, set: feed });
+    logSecurityEvent("calendar_feed_created", { account: me.id, scope: input.scope });
+    return jsonResponse({ ...(await buildSnapshot(me.id)), feedToken: token, notice: "Subscription link created" });
+  }
+  if (input.action === "setCalendarFeedScope") {
+    const changed = await db.update(calendarFeeds).set({ scope: input.scope }).where(eq(calendarFeeds.memberId, me.id)).returning();
+    if (!changed.length) throw new HttpError(404, "Create a subscription link first");
+    return jsonResponse({ ...(await buildSnapshot(me.id)), notice: `Subscription now shows: ${FEED_SCOPE_LABELS[input.scope]}` });
+  }
+  await db.delete(calendarFeeds).where(eq(calendarFeeds.memberId, me.id));
+  logSecurityEvent("calendar_feed_deleted", { account: me.id });
+  return jsonResponse({ ...(await buildSnapshot(me.id)), notice: "Subscription link turned off" });
 }
 
 async function importCalendar(
@@ -811,6 +838,8 @@ export async function POST(request: Request) {
       return await manageSubscription(input, me, request);
     if (input.action === "previewCalendar" || input.action === "importCalendar")
       return await importCalendar(input, me, request);
+    if (input.action === "createCalendarFeed" || input.action === "setCalendarFeedScope" || input.action === "deleteCalendarFeed")
+      return await manageCalendarFeed(input, me);
     if (input.action === "undoCalendarImport") {
       const removed = await db
         .delete(items)

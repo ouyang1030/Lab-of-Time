@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
-import { ArrowUpRight, Crown, KeyRound, MoreHorizontal, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowUpRight, Crown, KeyRound, Trash2 } from "lucide-react";
 import { ROLE_LABELS, type Member, type Mutate, type Snapshot } from "@/lib/model";
 import { Avatar } from "./calendar";
 import Dialog from "./dialog";
+import ActionMenu from "./action-menu";
 
 export default function Members({
   data,
@@ -204,15 +205,22 @@ export default function Members({
                               : "Restore"}
                           </button>
                         </div>
-                        <MemberMenu
-                          member={member}
+                        <ActionMenu
+                          name={member.name}
                           busy={busy}
-                          onReset={() => void mutate({ action: "issueReset", id: member.id }, "Reset code generated")}
-                          onTransfer={() => {
-                            setTransferReady(false);
-                            setConfirmation({ action: "transferOwnership", member });
-                          }}
-                          onRemove={() => setConfirmation({ action: "removeMember", member })}
+                          actions={[
+                            { label: "Issue reset code", icon: <KeyRound size={14} />, onSelect: () => void mutate({ action: "issueReset", id: member.id }, "Reset code generated") },
+                            {
+                              label: "Transfer ownership",
+                              icon: <Crown size={14} />,
+                              disabled: !member.active,
+                              onSelect: () => {
+                                setTransferReady(false);
+                                setConfirmation({ action: "transferOwnership", member });
+                              },
+                            },
+                            { label: "Remove from lab", icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirmation({ action: "removeMember", member }) },
+                          ]}
                         />
                       </>
                     )}
@@ -223,84 +231,6 @@ export default function Members({
           })}
       </div>
     </section>
-  );
-}
-/** A menu button with arrow navigation, dismissal and focus restoration. */
-function MemberMenu({ member, busy, onReset, onTransfer, onRemove }: {
-  member: Member;
-  busy: boolean;
-  onReset: () => void;
-  onTransfer: () => void;
-  onRemove: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const menuId = useId();
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: PointerEvent) => {
-      if (!anchor.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", dismiss);
-    return () => document.removeEventListener("pointerdown", dismiss);
-  }, [open]);
-  const close = () => {
-    setOpen(false);
-    trigger.current?.focus();
-  };
-  const choose = (action: () => void) => {
-    close();
-    action();
-  };
-  return (
-    <div className="member-menu-anchor" ref={anchor} onBlur={(event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-    }}>
-      <button
-        ref={trigger}
-        type="button"
-        className="icon-button"
-        aria-label={`More actions for ${member.name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        disabled={busy}
-        onClick={() => setOpen(!open)}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setOpen(true);
-          }
-        }}
-      ><MoreHorizontal size={18} /></button>
-      {open && (
-        <div className="member-menu" id={menuId} role="menu" aria-label={`Actions for ${member.name}`} onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            close();
-          } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-            event.preventDefault();
-            const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
-            const current = options.indexOf(document.activeElement as HTMLButtonElement);
-            const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1
-              : (current + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
-            options[next]?.focus();
-          }
-        }}>
-          <button type="button" role="menuitem" tabIndex={-1} autoFocus disabled={busy} onClick={() => choose(onReset)}>
-            <KeyRound size={14} /> Issue reset code
-          </button>
-          <button type="button" role="menuitem" tabIndex={-1} disabled={busy || !member.active} onClick={() => choose(onTransfer)}>
-            <Crown size={14} /> Transfer ownership
-          </button>
-          <button type="button" role="menuitem" tabIndex={-1} className="member-danger" disabled={busy} onClick={() => choose(onRemove)}>
-            <Trash2 size={14} /> Remove from lab
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
 /** The owner's own badge; right-click (or the context-menu key) opens lab actions. */
