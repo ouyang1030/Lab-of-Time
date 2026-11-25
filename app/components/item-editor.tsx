@@ -139,7 +139,15 @@ export default function ItemEditor({
                 aria-label="Type"
                 value={draft.type}
                 disabled={!editable}
-                onChange={(e) => update("type", e.target.value as Item["type"])}
+                onChange={(e) => {
+                  const type = e.target.value as Item["type"];
+                  setDraft((current) => {
+                    if (type === "milestone")
+                      return { ...current, type, time: current.endTime || current.time, endTime: "" };
+                    const endTime = current.type === "milestone" ? "" : current.endTime;
+                    return { ...current, type, endTime: type === "meeting" && !endTime ? current.time : endTime };
+                  });
+                }}
               >
                 {Object.entries(TYPE_LABELS).map(([value, label]) => (
                   <option value={value} key={value}>
@@ -200,10 +208,10 @@ export default function ItemEditor({
                   }));
                 }}
               />
-              {!draft.allDay && (
+              {!draft.allDay && draft.type !== "milestone" && (
                 <input
                   type="time"
-                  aria-label={draft.type === "meeting" ? "Start time" : "Due time"}
+                  aria-label="Start time"
                   required
                   value={draft.time}
                   disabled={!editable}
@@ -227,15 +235,15 @@ export default function ItemEditor({
                   )
                 }
               />
-              {!draft.allDay && draft.type === "meeting" && (
+              {!draft.allDay && (
                 <input
                   type="time"
                   aria-label="End time"
-                  required
-                  min={endDay === draft.date ? draft.time : undefined}
-                  value={draft.endTime}
+                  required={draft.type !== "task"}
+                  min={draft.type !== "milestone" && endDay === draft.date ? draft.time : undefined}
+                  value={draft.type === "milestone" ? draft.time : draft.endTime}
                   disabled={!editable}
-                  onChange={(e) => update("endTime", e.target.value)}
+                  onChange={(e) => update(draft.type === "milestone" ? "time" : "endTime", e.target.value)}
                 />
               )}
             </Row>

@@ -128,11 +128,8 @@ export function layoutWeekRow(
       }
 
       const key = dayKeys[c];
-      const hasPrev = key > item.date;
-      const hasNext = key < itemEnd;
-
-      const connectLeft = hasPrev && c > 0;
-      const connectRight = hasNext && c < 6;
+      const connectLeft = key > item.date;
+      const connectRight = key < itemEnd;
       const isRowStart = c === 0;
 
       daySlots[c][slot] = {

@@ -60,8 +60,9 @@ export function toCalendar(
     if (item.allDay) {
       lines.push(`DTSTART;VALUE=DATE:${item.date.replaceAll("-", "")}`, `DTEND;VALUE=DATE:${(item.endDate || item.date).replaceAll("-", "")}`);
     } else {
-      lines.push(`DTSTART;TZID=Europe/Vienna:${item.date.replaceAll("-", "")}T${item.time.replace(":", "")}00`);
-      if (item.type === "meeting") lines.push(`DTEND;TZID=Europe/Vienna:${(item.endDate || item.date).replaceAll("-", "")}T${item.endTime.replace(":", "")}00`);
+      const startDate = item.type === "milestone" ? item.endDate || item.date : item.date;
+      lines.push(`DTSTART;TZID=Europe/Vienna:${startDate.replaceAll("-", "")}T${item.time.replace(":", "")}00`);
+      if (item.type !== "milestone" && item.endTime && (item.date !== (item.endDate || item.date) || item.time !== item.endTime)) lines.push(`DTEND;TZID=Europe/Vienna:${(item.endDate || item.date).replaceAll("-", "")}T${item.endTime.replace(":", "")}00`);
     }
     lines.push(
       `SUMMARY:${escapeText(item.title)}`,

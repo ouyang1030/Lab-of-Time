@@ -6,7 +6,6 @@ import {
   CalendarArrowDown,
   CalendarDays,
   Check,
-  CheckCheck,
   CheckSquare,
   ChevronDown,
   ChevronLeft,
@@ -94,7 +93,7 @@ const newItem = (
   ownerId,
   date,
   time: "09:00",
-  endTime: "10:00",
+  endTime: type === "task" ? "" : "10:00",
   endDate: "",
   allDay: false,
   sourceName: "",
@@ -265,13 +264,6 @@ export default function ResearchApp({
   const sectionItems = inPeriod
     .filter((item) => item.type === sectionType)
     .sort(byDateTime);
-  const tasks = inPeriod.filter((item) => item.type === "task");
-  const meetings = inPeriod.filter((item) => item.type === "meeting");
-  const milestones = inPeriod.filter((item) => item.type === "milestone");
-  const completed = tasks.filter((item) => item.status === "done").length;
-  const progress = tasks.length
-    ? Math.round((completed / tasks.length) * 100)
-    : 0;
   const selectedItems = filtered
     .filter((item) => overlapsDates(item, selectedDay))
     .sort((a, b) => a.time.localeCompare(b.time));
@@ -538,37 +530,6 @@ export default function ResearchApp({
                 <button aria-label="Dismiss error" onClick={() => setError("")}>
                   <X size={16} />
                 </button>
-              </div>
-            )}
-            {section !== "members" && (
-              <div className="stats-grid">
-                <Stat
-                  title={`${VIEWS[view]} Tasks`}
-                  value={tasks.length}
-                  detail={`${tasks.filter((item) => item.status === "doing").length} in progress`}
-                  icon={<CheckSquare size={18} />}
-                />
-                <Stat
-                  title="Completion"
-                  value={`${progress}%`}
-                  detail={`${completed} / ${tasks.length} done`}
-                  icon={<CheckCheck size={18} />}
-                  progress={progress}
-                />
-                <Stat
-                  title="Meetings"
-                  value={meetings.length}
-                  detail={`${meetings.filter((item) => item.date >= todayKey).length} upcoming`}
-                  icon={<Video size={18} />}
-                />
-                <Stat
-                  title="Open Milestones"
-                  value={
-                    milestones.filter((item) => item.status !== "done").length
-                  }
-                  detail={`${milestones.length} total in ${view}`}
-                  icon={<Flag size={18} />}
-                />
               </div>
             )}
             {section !== "members" ? (
@@ -1176,37 +1137,6 @@ function LabName({
           event.currentTarget.blur();
       }}
     />
-  );
-}
-function Stat({
-  title,
-  value,
-  detail,
-  icon,
-  progress,
-}: {
-  title: string;
-  value: number | string;
-  detail: string;
-  icon: React.ReactNode;
-  progress?: number;
-}) {
-  return (
-    <section className="stat-card">
-      <div className="stat-top">
-        <span>{title}</span>
-        <span className="stat-icon">{icon}</span>
-      </div>
-      <div className="stat-number">{value}</div>
-      <div className="stat-bottom">
-        <span>{detail}</span>
-        {progress !== undefined && (
-          <div className="progress-bar">
-            <i style={{ width: `${progress}%` }} />
-          </div>
-        )}
-      </div>
-    </section>
   );
 }
 function Empty({

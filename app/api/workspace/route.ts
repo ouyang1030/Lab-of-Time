@@ -60,7 +60,7 @@ const itemSchema = z
     ownerId: z.string().min(1),
     date: z.string().refine(validDate, "Please select a valid date"),
     time,
-    endTime: time,
+    endTime: time.or(z.literal("")),
     endDate: z.string().refine(v=>v === "" || validDate(v)).default(""),
     allDay: z.boolean().default(false),
     cycle: z.enum(["week", "month", "quarter", "year"]),
@@ -71,7 +71,8 @@ const itemSchema = z
     url: webUrl.default(""),
     version: z.number().int().positive().optional(),
   })
-  .refine((item) => item.allDay ? item.endDate > item.date : ((item.endDate || item.date) >= item.date && (item.type !== "meeting" || `${item.endDate || item.date}${item.endTime}` >= `${item.date}${item.time}`)), {
+  .refine((item) => item.type !== "meeting" || !!item.endTime, { message: "Please select an end time" })
+  .refine((item) => item.allDay ? item.endDate > item.date : ((item.endDate || item.date) >= item.date && (item.type === "milestone" || !item.endTime || `${item.endDate || item.date}${item.endTime}` >= `${item.date}${item.time}`)), {
     message: "End time must be after start time",
   });
 

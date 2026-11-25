@@ -1,6 +1,6 @@
 import { overlapsDates, itemTimeLabel, lastItemDate } from "@/lib/item-dates";
 import EventPreview from "./event-preview";
-import { Flag, Plus, Check, Video } from "lucide-react";
+import { CalendarDays, Flag, Plus, Check, Video } from "lucide-react";
 import {
   addDays,
   dateKey,
@@ -64,10 +64,9 @@ export function EventPill({
   owner,
   onSelect,
   onToggleDone,
-  connectLeft = false,
-  connectRight = false,
-  isRowStart = false,
-  isLastDay,
+  connectLeft,
+  connectRight,
+  isRowStart,
 }: {
   item: Item;
   color?: MemberColor;
@@ -75,18 +74,30 @@ export function EventPill({
   onSelect: (item: Item) => void;
   /** Omitted when the viewer may not change this item's status. */
   onToggleDone?: (item: Item) => void;
-  connectLeft?: boolean;
-  connectRight?: boolean;
-  isRowStart?: boolean;
-  isLastDay: boolean;
+  connectLeft: boolean;
+  connectRight: boolean;
+  isRowStart: boolean;
 }) {
-  const showIcon = !connectLeft;
-  const showTitle = !connectLeft || isRowStart;
-  const showTime = !connectLeft;
+  const multiDay = connectLeft || connectRight;
+  const isFirstDay = !connectLeft;
+  const isLastDay = !connectRight;
+  const showTitle = isFirstDay || isRowStart;
+
+  let timeLabel = itemTimeLabel(item);
+  if (multiDay) {
+    timeLabel = "";
+    if (!item.allDay) {
+      const endTime = item.type === "milestone" ? item.time : item.endTime;
+      if (isFirstDay && item.type !== "milestone") timeLabel = item.time;
+      if (isLastDay && endTime) timeLabel = `ends ${endTime}`;
+    }
+  }
 
   const classes = [
     "event-pill",
     item.type,
+    multiDay ? "multi-day" : "",
+    multiDay && item.allDay ? "all-day-span" : "",
     item.priority === "high" && isLastDay ? "priority-fold" : "",
     `color-${color}`,
     item.status === "done" ? "completed" : "",
@@ -109,12 +120,14 @@ export function EventPill({
       <button
         className={classes}
         onClick={() => onSelect(item)}
-        aria-label={item.priority === "high" ? `${item.title}, high priority` : undefined}
+        aria-label={`${item.title}${timeLabel ? `, ${timeLabel}` : ""}${item.priority === "high" ? ", high priority" : ""}`}
         title={`${itemTimeLabel(item)} ${item.title}`}
       >
-        {showIcon && (
+        {isFirstDay && (
           item.status === "done" ? (
             <Check size={11} />
+          ) : multiDay && item.allDay ? (
+            <CalendarDays size={11} />
           ) : item.type === "milestone" ? (
             <Flag size={11} />
           ) : item.type === "meeting" ? (
@@ -128,7 +141,7 @@ export function EventPill({
         ) : (
           <span className="event-pill-cont" aria-hidden="true" />
         )}
-        {showTime && <time>{itemTimeLabel(item)}</time>}
+        {timeLabel && <time>{timeLabel}</time>}
       </button>
       {onToggleDone && <DoneToggle item={item} onToggle={onToggleDone} />}
     </EventPreview>
@@ -352,7 +365,6 @@ export default function Calendar({
                           }
                           connectLeft={slotItem.connectLeft}
                           connectRight={slotItem.connectRight}
-                          isLastDay={key === lastItemDate(slotItem.item)}
                           isRowStart={slotItem.isRowStart}
                         />
                       ) : (
